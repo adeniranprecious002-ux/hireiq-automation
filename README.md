@@ -550,7 +550,7 @@ hireiq-automation/
 
 - GitHub: [@adeniranprecious002-ux](https://github.com//adeniranprecious002-ux)
 - LinkedIn: [Adeniran Precious Adebayo](https://www.linkedin.com/in/precious-adeniran-842b58294)
-- Frontend Repo: [hireiq-frontend](https://github.com/yourusername/hireiq-smart-candidate-screening)
+- Frontend Repo: [hireiq-frontend](https://github.com/adeniranprecious002-ux/hireiq-smart-candidate-screening)
 
 ---
 
