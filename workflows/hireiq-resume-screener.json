@@ -1,0 +1,739 @@
+{
+  "name": "HireIQ - Resume Screener",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "/screen-resumes",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        -1136,
+        -96
+      ],
+      "id": "1006cda6-d19a-48fa-8557-2054bdf1be3d",
+      "name": "Webhook",
+      "webhookId": "8ce6ea43-5d04-4245-bc13-8c11d171f6aa"
+    },
+    {
+      "parameters": {
+        "operation": "pdf",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.extractFromFile",
+      "typeVersion": 1.1,
+      "position": [
+        -224,
+        32
+      ],
+      "id": "bec5f7c0-5a53-40d9-b08b-29755f937012",
+      "name": "Extract from File"
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        256,
+        -48
+      ],
+      "id": "fad92987-ee66-4a91-a821-2ceff204253b",
+      "name": "Loop Over Items"
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.noOp",
+      "name": "Replace Me",
+      "typeVersion": 1,
+      "position": [
+        464,
+        48
+      ],
+      "id": "5e67bbc6-82a7-4e95-abc2-3483d44eadf9"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "bed08460-280a-4095-8363-21367f47f108",
+              "name": "resume_text",
+              "value": "={{ $json.text }}",
+              "type": "string"
+            },
+            {
+              "id": "04c25047-653d-49d4-a5bc-9fd1498c0402",
+              "name": "job_description",
+              "value": "={{ $('Webhook').item.json.body.job_description }}",
+              "type": "string"
+            },
+            {
+              "id": "c6860700-c02f-4b0c-9c06-1d50caf8ad59",
+              "name": "file_name",
+              "value": "={{ $('Code in JavaScript2').item.json.original_filename }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -16,
+        -32
+      ],
+      "id": "5fed4478-ac82-4203-a53a-c09db76f9df5",
+      "name": "Edit Fields"
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "value": "gpt-4o-mini",
+          "mode": "list",
+          "cachedResultName": "GPT-4O-MINI"
+        },
+        "responses": {
+          "values": [
+            {
+              "role": "system",
+              "content": "=You are a senior technical recruiter with 10+ years of experience evaluating candidates across tech, data, and operations roles.\n\nYou will be given a job description and a candidate's resume. Your task is to objectively score and evaluate the candidate's fit.\n\n---\n\nJOB DESCRIPTION:\n{{ $json.job_description }}\n\n---\n\nCANDIDATE RESUME:\n{{ $json.resume_text }}\n\n---\n\nRespond ONLY with a valid JSON object in this exact format, no extra text:\n\n{\n  \"candidate_name\": \"extracted from resume or 'Unknown'\",\n  \"score\": <integer 0-100>,\n  \"recommendation\": \"<one of: Strong Hire | Lean Hire | Maybe | Lean Reject | Reject>\",\n  \"summary\": \"<2-3 sentence overall assessment>\",\n  \"strengths\": [\n    \"<strength 1>\",\n    \"<strength 2>\",\n    \"<strength 3>\"\n  ],\n  \"weaknesses\": [\n    \"<weakness 1>\",\n    \"<weakness 2>\",\n    \"<weakness 3>\"\n  ],\n  \"skill_match\": {\n    \"required_skills_found\": [\"<skill1>\", \"<skill2>\"],\n    \"required_skills_missing\": [\"<skill1>\", \"<skill2>\"],\n    \"bonus_skills_found\": [\"<skill1>\"]\n  },\n  \"experience_match\": \"<Exceeds Requirements | Meets Requirements | Partially Meets | Does Not Meet>\",\n  \"culture_fit_notes\": \"<brief note on soft skills, communication style, career trajectory>\",\n  \"red_flags\": [\"<any concerns, or empty array if none>\"]\n}"
+            }
+          ]
+        },
+        "builtInTools": {},
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 2.1,
+      "position": [
+        432,
+        -288
+      ],
+      "id": "64ddd1a7-8c64-4a13-9921-88b9c6b7282f",
+      "name": "Message a model",
+      "credentials": {
+        "openAiApi": {
+          "id": "zGgDovBFFbp9MHPb",
+          "name": "OpenAi account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all();\n\nconst candidates = items.map(item => {\n  // Get the raw text from OpenAI response\n  const rawText = item.json.output?.[0]?.content?.[0]?.text || \n                  item.json.content?.[0]?.text || \n                  item.json.text || '';\n  \n  // Parse the JSON from the text\n  let candidate = {};\n  try {\n    const cleaned = rawText.replace(/```json|```/g, '').trim();\n    candidate = JSON.parse(cleaned);\n  } catch(e) {\n    candidate = { \n      candidate_name: 'Parse Error', \n      score: 0,\n      recommendation: 'Error',\n      summary: rawText.substring(0, 100)\n    };\n  }\n  \n  return candidate;\n});\n\n// Sort by score descending\nconst ranked = candidates\n  .sort((a, b) => (b.score || 0) - (a.score || 0))\n  .map((c, i) => ({\n    ...c,\n    rank: i + 1,\n    tier: c.score >= 75 ? '🟢 Fast Track' \n        : c.score >= 50 ? '🟡 Review' \n        : '🔴 Reject',\n    strengths: Array.isArray(c.strengths) ? c.strengths.join(', ') : '',\n    weaknesses: Array.isArray(c.weaknesses) ? c.weaknesses.join(', ') : '',\n    skills_found: c.skill_match?.required_skills_found?.join(', ') || '',\n    skills_missing: c.skill_match?.required_skills_missing?.join(', ') || '',\n    red_flags: Array.isArray(c.red_flags) ? c.red_flags.join(', ') : '',\n    processed_at: new Date().toISOString()\n  }));\n\nreturn ranked.map(c => ({ json: c }));"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        752,
+        -416
+      ],
+      "id": "78e5b0c0-96a9-430d-84a0-6fa39bce3592",
+      "name": "Code in JavaScript"
+    },
+    {
+      "parameters": {
+        "jsCode": "const staticData = $getWorkflowStaticData('global');\n\nconst ip = $json.headers['x-forwarded-for'] || $json.headers['x-real-ip'] || 'unknown';\n\nif (!staticData.requests) {\n  staticData.requests = {};\n}\n\nconst now = Date.now();\nconst windowTime = 60 * 60 * 1000; // 60 minutes\n\nif (!staticData.requests[ip]) {\n  staticData.requests[ip] = [];\n}\n\n// Remove old requests outside the time window\nstaticData.requests[ip] = staticData.requests[ip].filter(\n  t => now - t < windowTime\n);\n\n// Add current request\nstaticData.requests[ip].push(now);\n\nconst requestCount = staticData.requests[ip].length;\n\n// Return JSON AND preserve the binary file\nreturn [{\n  json: {\n    ip,\n    requestCount,\n    job_description: $json.body?.job_description || $json.job_description || ''\n  },\n  binary: $input.first().binary  // ← preserves the PDF\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -928,
+        -96
+      ],
+      "id": "1c46844c-5354-4ecc-be49-70df636cb2cc",
+      "name": "Code in JavaScript1"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "2506327a-d5f2-44e3-ab47-2b6be3509d1f",
+              "leftValue": "={{$json.requestCount}}",
+              "rightValue": 10,
+              "operator": {
+                "type": "number",
+                "operation": "gt"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        -672,
+        -16
+      ],
+      "id": "a6c9420f-5cac-44aa-8b38-a7b4fe5a6943",
+      "name": "If"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "Response Code: 429\nResponse Body:\n{\n \"error\": \"Too many requests, please wait\"\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        -224,
+        -176
+      ],
+      "id": "5c87a14f-76c8-4718-be41-f9afaafc0d53",
+      "name": "Respond to Webhook"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        1872,
+        -48
+      ],
+      "id": "5afc8799-1fb4-4491-8e59-e52b3771b584",
+      "name": "Respond to Webhook1"
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all();\nconst firstItem = items[0];\n\n// Get all binary keys (resumes0, resumes1, resumes2 etc.)\nconst binaryKeys = Object.keys(firstItem.binary || {})\n  .filter(key => key.startsWith('resumes'));\n\n// Create one item per resume, each with binary field named 'data'\nreturn binaryKeys.map(key => ({\n  json: {\n    job_description: firstItem.json.job_description || '',\n    original_filename: firstItem.binary[key].fileName || key\n  },\n  binary: {\n    data: firstItem.binary[key]  // rename to 'data' for Extract from File\n  }\n}));"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -464,
+        32
+      ],
+      "id": "3a4701c8-1191-435c-ab16-2c7de95cd4ba",
+      "name": "Code in JavaScript2"
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "1ib2P-STwBtLCAVJ6dTAcEBF6tuUCuoFKVLmoJYV2t-Q",
+          "mode": "list",
+          "cachedResultName": "Rankings",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1ib2P-STwBtLCAVJ6dTAcEBF6tuUCuoFKVLmoJYV2t-Q/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "Rankings",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1ib2P-STwBtLCAVJ6dTAcEBF6tuUCuoFKVLmoJYV2t-Q/edit#gid=0"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Score": "={{ $json.score }}",
+            "Candidate Name": "={{ $json.candidate_name }}",
+            "Rank": "={{ $json.rank }}",
+            "Tier": "={{ $json.tier }}",
+            "Summary": "={{ $json.summary }}",
+            "Strengths": "={{ $json.strengths }}",
+            "Weaknesses": "={{ $json.weaknesses }}",
+            "Skills Found": "={{ $json.skill_match.required_skills_found }}",
+            "Skills Missing": "={{ $json.skills_missing }}",
+            "Experience Match": "={{ $json.experience_match }}",
+            "Red Flags": "={{ $json.red_flags }}",
+            "Processed At": "={{ $json.processed_at }}",
+            "Recommendation": "={{ $json.recommendation }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "Rank",
+              "displayName": "Rank",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Candidate Name",
+              "displayName": "Candidate Name",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Score",
+              "displayName": "Score",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Tier",
+              "displayName": "Tier",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Recommendation",
+              "displayName": "Recommendation",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Summary",
+              "displayName": "Summary",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Strengths",
+              "displayName": "Strengths",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Weaknesses",
+              "displayName": "Weaknesses",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Skills Found",
+              "displayName": "Skills Found",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Skills Missing",
+              "displayName": "Skills Missing",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Experience Match",
+              "displayName": "Experience Match",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Red Flags",
+              "displayName": "Red Flags",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Processed At",
+              "displayName": "Processed At",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        944,
+        -288
+      ],
+      "id": "7c513d58-8d21-46bb-91b9-5d118c0fd353",
+      "name": "Append row in sheet",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "wDroqo3efYxkZJq4",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "1ib2P-STwBtLCAVJ6dTAcEBF6tuUCuoFKVLmoJYV2t-Q",
+          "mode": "list",
+          "cachedResultName": "Rankings",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1ib2P-STwBtLCAVJ6dTAcEBF6tuUCuoFKVLmoJYV2t-Q/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 1888044431,
+          "mode": "list",
+          "cachedResultName": "Batch Summary",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1ib2P-STwBtLCAVJ6dTAcEBF6tuUCuoFKVLmoJYV2t-Q/edit#gid=1888044431"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Job Title": "={{ $json.job_title }}",
+            "Total Candidates": "={{ $json.total_candidates }}",
+            "Fast Track Count": "={{ $json.fast_track }}",
+            "Review Count": "={{ $json.review }}",
+            "Rejected Count": "={{ $json.rejected }}",
+            "Average Score": "={{ $json.average_score }}",
+            "Top Candidate": "={{ $json.top_candidate }}",
+            "Run Date": "={{ $json.run_date }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "Job Title",
+              "displayName": "Job Title",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Total Candidates",
+              "displayName": "Total Candidates",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Fast Track Count",
+              "displayName": "Fast Track Count",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Review Count",
+              "displayName": "Review Count",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Rejected Count",
+              "displayName": "Rejected Count",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Average Score",
+              "displayName": "Average Score",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Top Candidate",
+              "displayName": "Top Candidate",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Run Date",
+              "displayName": "Run Date",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        1408,
+        -128
+      ],
+      "id": "063ce072-351d-4217-82d8-163e055c5818",
+      "name": "Append row in sheet1",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "wDroqo3efYxkZJq4",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all();\n\n// Data is already flat from Google Sheets node\nconst candidates = items.filter(item => \n  item.json['Candidate Name'] || item.json.candidate_name\n);\n\nconst getName = (item) => item.json['Candidate Name'] || item.json.candidate_name || '';\nconst getScore = (item) => Number(item.json['Score'] || item.json.score || 0);\n\nconst fastTrack = candidates.filter(c => getScore(c) >= 75).length;\nconst review = candidates.filter(c => getScore(c) >= 50 && getScore(c) < 75).length;\nconst rejected = candidates.filter(c => getScore(c) < 50).length;\nconst avgScore = candidates.length > 0 \n  ? Math.round(candidates.reduce((sum, c) => sum + getScore(c), 0) / candidates.length)\n  : 0;\n\nconst topCandidate = [...candidates].sort((a, b) => getScore(b) - getScore(a))[0];\n\nreturn [{\n  json: {\n    job_title: 'Data Analyst',\n    total_candidates: candidates.length,\n    fast_track: fastTrack,\n    review: review,\n    rejected: rejected,\n    average_score: avgScore,\n    top_candidate: getName(topCandidate) || 'N/A',\n    run_date: new Date().toISOString().split('T')[0]\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1168,
+        -240
+      ],
+      "id": "b62398e5-ebee-4512-a422-c71e3815acf5",
+      "name": "Code in JavaScript3"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Get batch summary\nconst summary = $('Code in JavaScript3').first().json;\n\n// Get all ranked candidates\nconst candidates = $('Code in JavaScript').all().map(i => i.json);\n\nreturn [{\n  json: {\n    success: true,\n    total: summary.total_candidates,\n    fast_track: summary.fast_track,\n    review: summary.review,\n    rejected: summary.rejected,\n    average_score: summary.average_score,\n    top_candidate: summary.top_candidate,\n    run_date: summary.run_date,\n    candidates: candidates\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1616,
+        -128
+      ],
+      "id": "6c411475-654f-4f60-bc48-7d9f6d90ccb4",
+      "name": "Code in JavaScript4"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Loop Over Items": {
+      "main": [
+        [
+          {
+            "node": "Message a model",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Replace Me",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Replace Me": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Items",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract from File": {
+      "main": [
+        [
+          {
+            "node": "Edit Fields",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Edit Fields": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Items",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Message a model": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript": {
+      "main": [
+        [
+          {
+            "node": "Append row in sheet",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript1": {
+      "main": [
+        [
+          {
+            "node": "If",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Code in JavaScript2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript2": {
+      "main": [
+        [
+          {
+            "node": "Extract from File",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Append row in sheet": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript3": {
+      "main": [
+        [
+          {
+            "node": "Append row in sheet1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Append row in sheet1": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript4",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript4": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false
+  },
+  "versionId": "6b16a4b1-18f4-4bc1-804f-14f4665dfed0",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "06b8a67c21d4fc77231e09f6f75f953f6d7fad8efd32a1586c8d275ce8960bcb"
+  },
+  "id": "Q0VDRI4oyulJmipi",
+  "tags": []
+}
