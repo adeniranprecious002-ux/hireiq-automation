@@ -120,14 +120,14 @@
       "name": "Message a model",
       "credentials": {
         "openAiApi": {
-          "id": "zGgDovBFFbp9MHPb",
+          "id": "YOUR_CREDENTIAL_ID",
           "name": "OpenAi account"
         }
       }
     },
     {
       "parameters": {
-        "jsCode": "const items = $input.all();\n\nconst candidates = items.map(item => {\n  // Get the raw text from OpenAI response\n  const rawText = item.json.output?.[0]?.content?.[0]?.text || \n                  item.json.content?.[0]?.text || \n                  item.json.text || '';\n  \n  // Parse the JSON from the text\n  let candidate = {};\n  try {\n    const cleaned = rawText.replace(/```json|```/g, '').trim();\n    candidate = JSON.parse(cleaned);\n  } catch(e) {\n    candidate = { \n      candidate_name: 'Parse Error', \n      score: 0,\n      recommendation: 'Error',\n      summary: rawText.substring(0, 100)\n    };\n  }\n  \n  return candidate;\n});\n\n// Sort by score descending\nconst ranked = candidates\n  .sort((a, b) => (b.score || 0) - (a.score || 0))\n  .map((c, i) => ({\n    ...c,\n    rank: i + 1,\n    tier: c.score >= 75 ? '🟢 Fast Track' \n        : c.score >= 50 ? '🟡 Review' \n        : '🔴 Reject',\n    strengths: Array.isArray(c.strengths) ? c.strengths.join(', ') : '',\n    weaknesses: Array.isArray(c.weaknesses) ? c.weaknesses.join(', ') : '',\n    skills_found: c.skill_match?.required_skills_found?.join(', ') || '',\n    skills_missing: c.skill_match?.required_skills_missing?.join(', ') || '',\n    red_flags: Array.isArray(c.red_flags) ? c.red_flags.join(', ') : '',\n    processed_at: new Date().toISOString()\n  }));\n\nreturn ranked.map(c => ({ json: c }));"
+        "jsCode": "const items = $input.all();\n\nconst candidates = items.map(item => {\n  // Get the raw text from OpenAI response\n  const rawText = item.json.output?.[0]?.content?.[0]?.text || \n                  item.json.content?.[0]?.text || \n                  item.json.text || '';\n  \n  // Parse the JSON from the text\n  let candidate = {};\n  try {\n    const cleaned = rawText.replace(/```json|```/g, '').trim();\n    candidate = JSON.parse(cleaned);\n  } catch(e) {\n    candidate = { \n      candidate_name: 'Parse Error', \n      score: 0,\n      recommendation: 'Error',\n      summary: rawText.substring(0, 100)\n    };\n  }\n  \n  return candidate;\n});\n\n// Sort by score descending\nconst ranked = candidates\n  .sort((a, b) => (b.score || 0) - (a.score || 0))\n  .map((c, i) => ({\n    ...c,\n    rank: i + 1,\n    tier: c.score >= 75 ? '\ud83d\udfe2 Fast Track' \n        : c.score >= 50 ? '\ud83d\udfe1 Review' \n        : '\ud83d\udd34 Reject',\n    strengths: Array.isArray(c.strengths) ? c.strengths.join(', ') : '',\n    weaknesses: Array.isArray(c.weaknesses) ? c.weaknesses.join(', ') : '',\n    skills_found: c.skill_match?.required_skills_found?.join(', ') || '',\n    skills_missing: c.skill_match?.required_skills_missing?.join(', ') || '',\n    red_flags: Array.isArray(c.red_flags) ? c.red_flags.join(', ') : '',\n    processed_at: new Date().toISOString()\n  }));\n\nreturn ranked.map(c => ({ json: c }));"
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -140,7 +140,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const staticData = $getWorkflowStaticData('global');\n\nconst ip = $json.headers['x-forwarded-for'] || $json.headers['x-real-ip'] || 'unknown';\n\nif (!staticData.requests) {\n  staticData.requests = {};\n}\n\nconst now = Date.now();\nconst windowTime = 60 * 60 * 1000; // 60 minutes\n\nif (!staticData.requests[ip]) {\n  staticData.requests[ip] = [];\n}\n\n// Remove old requests outside the time window\nstaticData.requests[ip] = staticData.requests[ip].filter(\n  t => now - t < windowTime\n);\n\n// Add current request\nstaticData.requests[ip].push(now);\n\nconst requestCount = staticData.requests[ip].length;\n\n// Return JSON AND preserve the binary file\nreturn [{\n  json: {\n    ip,\n    requestCount,\n    job_description: $json.body?.job_description || $json.job_description || ''\n  },\n  binary: $input.first().binary  // ← preserves the PDF\n}];"
+        "jsCode": "const staticData = $getWorkflowStaticData('global');\n\nconst ip = $json.headers['x-forwarded-for'] || $json.headers['x-real-ip'] || 'unknown';\n\nif (!staticData.requests) {\n  staticData.requests = {};\n}\n\nconst now = Date.now();\nconst windowTime = 60 * 60 * 1000; // 60 minutes\n\nif (!staticData.requests[ip]) {\n  staticData.requests[ip] = [];\n}\n\n// Remove old requests outside the time window\nstaticData.requests[ip] = staticData.requests[ip].filter(\n  t => now - t < windowTime\n);\n\n// Add current request\nstaticData.requests[ip].push(now);\n\nconst requestCount = staticData.requests[ip].length;\n\n// Return JSON AND preserve the binary file\nreturn [{\n  json: {\n    ip,\n    requestCount,\n    job_description: $json.body?.job_description || $json.job_description || ''\n  },\n  binary: $input.first().binary  // \u2190 preserves the PDF\n}];"
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -232,17 +232,17 @@
         "operation": "append",
         "documentId": {
           "__rl": true,
-          "value": "1ib2P-STwBtLCAVJ6dTAcEBF6tuUCuoFKVLmoJYV2t-Q",
+          "value": "YOUR_GOOGLE_SHEET_ID_HERE",
           "mode": "list",
           "cachedResultName": "Rankings",
-          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1ib2P-STwBtLCAVJ6dTAcEBF6tuUCuoFKVLmoJYV2t-Q/edit?usp=drivesdk"
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/YOUR_GOOGLE_SHEET_ID_HERE/edit?usp=drivesdk"
         },
         "sheetName": {
           "__rl": true,
           "value": "gid=0",
           "mode": "list",
           "cachedResultName": "Rankings",
-          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1ib2P-STwBtLCAVJ6dTAcEBF6tuUCuoFKVLmoJYV2t-Q/edit#gid=0"
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/YOUR_GOOGLE_SHEET_ID_HERE/edit#gid=0"
         },
         "columns": {
           "mappingMode": "defineBelow",
@@ -396,7 +396,7 @@
       "name": "Append row in sheet",
       "credentials": {
         "googleSheetsOAuth2Api": {
-          "id": "wDroqo3efYxkZJq4",
+          "id": "YOUR_CREDENTIAL_ID",
           "name": "Google Sheets account"
         }
       }
@@ -406,17 +406,17 @@
         "operation": "append",
         "documentId": {
           "__rl": true,
-          "value": "1ib2P-STwBtLCAVJ6dTAcEBF6tuUCuoFKVLmoJYV2t-Q",
+          "value": "YOUR_GOOGLE_SHEET_ID_HERE",
           "mode": "list",
           "cachedResultName": "Rankings",
-          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1ib2P-STwBtLCAVJ6dTAcEBF6tuUCuoFKVLmoJYV2t-Q/edit?usp=drivesdk"
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/YOUR_GOOGLE_SHEET_ID_HERE/edit?usp=drivesdk"
         },
         "sheetName": {
           "__rl": true,
           "value": 1888044431,
           "mode": "list",
           "cachedResultName": "Batch Summary",
-          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1ib2P-STwBtLCAVJ6dTAcEBF6tuUCuoFKVLmoJYV2t-Q/edit#gid=1888044431"
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/YOUR_GOOGLE_SHEET_ID_HERE/edit#gid=1888044431"
         },
         "columns": {
           "mappingMode": "defineBelow",
@@ -520,7 +520,7 @@
       "name": "Append row in sheet1",
       "credentials": {
         "googleSheetsOAuth2Api": {
-          "id": "wDroqo3efYxkZJq4",
+          "id": "YOUR_CREDENTIAL_ID",
           "name": "Google Sheets account"
         }
       }
